@@ -1,0 +1,246 @@
+# Example configuration for the opentrafficmap ITS-G5 receiver hardware.
+#
+# The its_g5_receiver component is transport agnostic: it captures 802.11p
+# frames and fires an on_packet trigger. This example reproduces the reference
+# firmware's behaviour by publishing the raw frames to the opentrafficmap MQTT
+# server and exposing status/info/stats topics plus a 5-LED status display.
+
+substitutions:
+  # Node ID used in all MQTT topics: its/<node_id>/...
+  # The reference firmware default is the Ethernet MAC as lowercase hex
+  # (e.g. "aabbccddeeff"). If opentrafficmap assigned you a friendly name
+  # (e.g. "node789"), use that instead. To find the Ethernet MAC, check the
+  # device log on first boot (the "info" topic also publishes it as "emac").
+  # node_id: "10bda3ddeeff"
+  node_id: "node789"
+
+esphome:
+  name: its-g5
+  on_boot:
+    # Keep the status LED effect running permanently.
+    - light.turn_on:
+        id: status_leds
+        effect: "Status"
+
+esp32:
+  board: esp32-c5-devkitc-1
+  framework:
+    type: esp-idf
+
+logger:
+
+# Home Assistant connection via the native API (independent of MQTT).
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+
+external_components:
+  - source: github://hn/esphome-its-g5
+    components: [ its_g5_receiver, ethernet ]
+
+# Uplink. This is the KSZ8851SNL SPI ethernet of the OpenTrafficMap hardware.
+# It can be replaced by any other uplink (e.g. an LTE modem) without touching
+# the its_g5_receiver component.
+ethernet:
+  type: KSZ8851SNL
+  clk_pin: GPIO6
+  mosi_pin: GPIO7
+  miso_pin: GPIO2
+  cs_pin: GPIO27
+  interrupt_pin: GPIO9
+  clock_speed: 16MHz
+
+# MQTT transport to the opentrafficmap C-ITS server. Publishing is anonymous
+# (no username/password required). TLS is mandatory (port 8883); the server
+# uses a Let's Encrypt certificate, so we verify against the ISRG Root X1 CA
+# (isrg-root-x1.pem, not secret). The wildcard certificate
+# (*.opentrafficmap.org) covers cits1, so no skip_cert_cn_check is needed.
+# Discovery is disabled so we do not publish Home Assistant discovery messages
+# to that broker.
+mqtt:
+  broker: cits1.opentrafficmap.org
+  port: 8883
+  id: mqtt_client
+  discovery: false
+  skip_cert_cn_check: true
+  certificate_authority: |
+    -----BEGIN CERTIFICATE-----
+    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
+    -----END CERTIFICATE-----
+  topic_prefix: "its/${node_id}"
+  # By default, ESPHome will send a retained MQTT message to <TOPIC_PREFIX>/status
+  # with payload 'online', and will tell the broker to send a
+  # message <TOPIC_PREFIX>/status with payload 'offline' if the connection drops.
+  # Fortunately, these default values exactly match the OpenTrafficMap
+  # project, so there is no need to specify them explicitly:
+  #
+  #birth_message:
+  #  topic: "its/${node_id}/status"
+  #  payload: "online"
+  #  retain: true
+  #will_message:
+  #  topic: "its/${node_id}/status"
+  #  payload: "offline"
+  #  retain: true
+  on_connect:
+    - delay: 3s
+    # Publish node info once on connect (its/<node_id>/info).
+    - lambda: |-
+        uint8_t mac[6];
+        ethernet::global_eth_component->get_eth_mac_address_raw(mac);
+        char info[160];
+        int n = snprintf(info, sizeof(info),
+                         "{\"emac\":\"%02x:%02x:%02x:%02x:%02x:%02x\","
+                         "\"ver\":\"%s\",\"hwv\":\"esphome\"}",
+                         mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
+                         ESPHOME_VERSION);
+        id(mqtt_client).publish("its/${node_id}/info", info, n, 0, false);
+
+# On-board LM75 temperature sensor (I2C on GPIO23/GPIO24, address 0x48).
+i2c:
+  sda: GPIO23
+  scl: GPIO24
+
+globals:
+  # Heartbeat toggle (LED0).
+  - id: hb_on
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  # Timestamp (millis) of the last received C-ITS frame (LED4 flash).
+  - id: last_packet_ms
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+
+its_g5_receiver:
+  id: g5
+  channel: 5900
+  broadcast_only: true
+  on_packet:
+    #   x       -> std::vector<uint8_t>  (raw frame bytes)
+    #   rssi    -> float                 (dBm)
+    #   channel -> int
+    #   rate    -> int
+    - lambda: |-
+        id(last_packet_ms) = millis();
+        id(mqtt_client).publish("its/${node_id}/packet",
+                                (const char *) x.data(), x.size(), 0, false);
+
+# 5-LED WS2812 status strip (GPIO27 on the proto-w5500 hardware).
+# One addressable effect owns all five LEDs and reads live state each pass:
+#   LED0 System  : white heartbeat (1 Hz)
+#   LED1 Sniffer : green = running (network up), red = not running
+#   LED2 Ethernet: off = no link, blink = link but no IP,
+#                  green = 100M + IP, orange = 10M + IP
+#   LED3 MQTT    : green = connected, yellow = disconnected
+#   LED4 C-ITS   : blue flash for 50 ms on each received frame
+light:
+  - platform: esp32_rmt_led_strip
+    id: status_leds
+    name: "Status LEDs"
+    pin: GPIO26
+    num_leds: 5
+    chipset: WS2812
+    rgb_order: GRB
+    default_transition_length: 0s
+    effects:
+      - addressable_lambda:
+          name: "Status"
+          update_interval: 50ms
+          lambda: |-
+            using namespace esphome;
+
+            // LED0: system heartbeat (white, toggled at 1 Hz by an interval).
+            it[0] = id(hb_on) ? Color(255, 255, 255) : Color(0, 0, 0);
+
+            // LED1: sniffer running (approximated by network connectivity).
+            bool ip = network::is_connected();
+            it[1] = ip ? Color(0, 255, 0) : Color(255, 0, 0);
+
+            // LED2: ethernet link / speed / IP.
+            if (!ip) {
+              it[2] = (millis() % 500 < 250) ? Color(40, 40, 40) : Color(0, 0, 0);
+            } else if (ethernet::global_eth_component->get_link_speed() ==
+                       ETH_SPEED_100M) {
+              it[2] = Color(0, 255, 0);      // 100M + IP
+            } else {
+              it[2] = Color(255, 120, 0);    // 10M + IP
+            }
+
+            // LED3: MQTT connection state.
+            it[3] = id(mqtt_client).is_connected() ? Color(0, 255, 0)
+                                                   : Color(255, 255, 0);
+
+            // LED4: C-ITS packet flash (blue for 50 ms after the last frame).
+            it[4] = (millis() - id(last_packet_ms) < 50) ? Color(0, 0, 255)
+                                                         : Color(0, 0, 0);
+
+interval:
+  # Heartbeat toggle for LED0
+  - interval: 1000ms
+    then:
+      - lambda: "id(hb_on) = !id(hb_on);"
+  # Periodic stats (its/<node_id>/stats): temperature + uptime seconds
+  - interval: 60s
+    then:
+      - lambda: |-
+          char stats[96];
+          float temp = id(temp_sensor).state;
+          uint64_t rbt = millis_64() / 1000ULL;
+          int n;
+          if (isnan(temp)) {
+            n = snprintf(stats, sizeof(stats), "{\"rbt\":%llu}", rbt);
+          } else {
+            n = snprintf(stats, sizeof(stats),
+                         "{\"temp\":%.1f,\"rbt\":%llu}", temp, rbt);
+          }
+          id(mqtt_client).publish("its/${node_id}/stats", stats, n, 0, false);
+
+sensor:
+  - platform: lm75b
+    id: temp_sensor
+    name: "Temperature"
+    address: 0x48
+    update_interval: 10s
+  - platform: its_g5_receiver
+    its_g5_receiver_id: g5
+    packets_received:
+      name: "Packets Received"
+      filters:
+        - throttle: 60s
+    packets_dropped:
+      name: "Packets Dropped"
+      filters:
+        - throttle: 60s
