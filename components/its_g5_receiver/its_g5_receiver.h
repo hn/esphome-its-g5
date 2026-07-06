@@ -65,13 +65,15 @@ class ITSG5Receiver : public Component {
   // Received (and accepted) frames. Only touched from loop().
   sensor::Sensor *packets_received_sensor_{nullptr};
   uint32_t packets_received_count_{0};
-  uint32_t last_published_received_{0};
+  // Initialized to a sentinel != 0 so the first publish_counters_() call emits
+  // the initial 0 (instead of the sensor staying "unavailable" until a frame).
+  uint32_t last_published_received_{UINT32_MAX};
 
   // Frames dropped in the RX callback (out of memory or work queue full).
   // Incremented from the WiFi task context, read from loop(), hence atomic.
   sensor::Sensor *packets_dropped_sensor_{nullptr};
   std::atomic<uint32_t> packets_dropped_count_{0};
-  uint32_t last_published_dropped_{0};
+  uint32_t last_published_dropped_{UINT32_MAX};
 
   uint32_t last_publish_ms_{0};
 
