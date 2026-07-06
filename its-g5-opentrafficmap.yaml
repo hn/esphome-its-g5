@@ -238,9 +238,11 @@ sensor:
     its_g5_receiver_id: g5
     packets_received:
       name: "Packets Received"
+      icon: mdi:package-variant-closed-check
       filters:
         - throttle: 60s
     packets_dropped:
       name: "Packets Dropped"
+      icon: mdi:package-variant-closed-remove
       filters:
         - throttle: 60s
