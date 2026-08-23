@@ -175,6 +175,7 @@ light:
       - light.turn_on:
           id: status_leds
           effect: "Status"
+          brightness: 45%
     effects:
       - addressable_lambda:
           name: "Status"
