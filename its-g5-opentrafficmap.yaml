@@ -237,6 +237,11 @@ sensor:
     update_interval: 10s
   - platform: its_g5_receiver
     its_g5_receiver_id: g5
+    bytes_received:
+      name: "Bytes Received"
+      icon: mdi:counter
+      filters:
+        - throttle: 60s
     packets_received:
       name: "Packets Received"
       icon: mdi:package-variant-closed-check

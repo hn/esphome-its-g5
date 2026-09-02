@@ -71,12 +71,16 @@ The `sensor` platform exposes optional cumulative counters:
 sensor:
   - platform: its_g5_receiver
     its_g5_receiver_id: g5
+    bytes_received:
+      name: "Bytes Received"
     packets_received:
       name: "Packets Received"
     packets_dropped:
       name: "Packets Dropped"
 ```
 
+The `bytes_received` sensor shows the total size of the received frames (the raw
+frame as captured, without the FCS checksum).
 The `packets_received` sensor shows the frames received and dispatched to `on_packet`,
 the `packets_dropped` sensors shows frames dropped in the RX callback because the internal work
 queue was full or memory was exhausted (a load/back-pressure indicator; should stay 0 in normal operation).

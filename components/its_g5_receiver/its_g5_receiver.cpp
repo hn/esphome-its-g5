@@ -23,7 +23,7 @@ static const uint32_t WORK_QUEUE_LEN = 128;
 // spent in a single loop when frames arrive in bursts.
 static const uint32_t MAX_FRAMES_PER_LOOP = 16;
 
-// Throttle interval for publishing the packets_received counter.
+// Throttle interval for publishing the counters.
 static const uint32_t COUNTER_PUBLISH_INTERVAL_MS = 1000;
 
 // Undocumented PHY helpers provided by the Espressif PHY blob (libphy.a).
@@ -80,6 +80,7 @@ void ITSG5Receiver::loop() {
     std::vector<uint8_t> data(frame.payload, frame.payload + frame.length);
     free(frame.payload);
 
+    this->bytes_received_count_ += frame.length;
     this->packets_received_count_++;
     this->packet_trigger_.trigger(std::move(data), frame.rssi, frame.channel, frame.rate);
   }
@@ -90,12 +91,14 @@ void ITSG5Receiver::loop() {
 void ITSG5Receiver::publish_counters_() {
   const uint32_t dropped = this->packets_dropped_count_.load(std::memory_order_relaxed);
 
+  const bool bytes_changed =
+      this->bytes_received_sensor_ != nullptr && this->bytes_received_count_ != this->last_published_bytes_;
   const bool received_changed =
       this->packets_received_sensor_ != nullptr && this->packets_received_count_ != this->last_published_received_;
   const bool dropped_changed =
       this->packets_dropped_sensor_ != nullptr && dropped != this->last_published_dropped_;
 
-  if (!received_changed && !dropped_changed) {
+  if (!bytes_changed && !received_changed && !dropped_changed) {
     return;
   }
 
@@ -106,6 +109,13 @@ void ITSG5Receiver::publish_counters_() {
   }
   this->last_publish_ms_ = now;
 
+  if (bytes_changed) {
+    this->last_published_bytes_ = this->bytes_received_count_;
+    // A sensor state is a float, so the value stays exact only up to 2^24
+    // bytes (16 MiB). Beyond that it rounds to the float grid; the counter
+    // itself keeps counting exactly.
+    this->bytes_received_sensor_->publish_state(static_cast<float>(this->bytes_received_count_));
+  }
   if (received_changed) {
     this->last_published_received_ = this->packets_received_count_;
     this->packets_received_sensor_->publish_state(this->packets_received_count_);

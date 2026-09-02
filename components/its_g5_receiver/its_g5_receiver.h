@@ -35,6 +35,7 @@ class ITSG5Receiver : public Component {
 
   void set_channel(uint32_t channel) { this->channel_ = channel; }
   void set_broadcast_only(bool broadcast_only) { this->broadcast_only_ = broadcast_only; }
+  void set_bytes_received_sensor(sensor::Sensor *s) { this->bytes_received_sensor_ = s; }
   void set_packets_received_sensor(sensor::Sensor *s) { this->packets_received_sensor_ = s; }
   void set_packets_dropped_sensor(sensor::Sensor *s) { this->packets_dropped_sensor_ = s; }
 
@@ -50,7 +51,7 @@ class ITSG5Receiver : public Component {
   // Instance handler invoked by the trampoline (runs in the WiFi task context).
   void handle_rx_(void *recv_buf, wifi_promiscuous_pkt_type_t type);
 
-  // Publish the packet counters, throttled to once per interval.
+  // Publish the counters, throttled to once per interval.
   void publish_counters_();
 
   uint32_t channel_{5900};
@@ -62,11 +63,18 @@ class ITSG5Receiver : public Component {
 
   Trigger<std::vector<uint8_t>, float, int, int> packet_trigger_;
 
+  // Total size of the received frames, summed over the same frames that
+  // packets_received_count_ counts. Each frame contributes rx_ctrl.dump_len,
+  // i.e. the raw frame without its FCS. Only touched from loop().
+  sensor::Sensor *bytes_received_sensor_{nullptr};
+  uint64_t bytes_received_count_{0};
+  // Initialized to a sentinel so the first publish_counters_() call emits the
+  // initial 0 (instead of the sensor staying "unavailable" until a frame).
+  uint64_t last_published_bytes_{UINT64_MAX};
+
   // Received (and accepted) frames. Only touched from loop().
   sensor::Sensor *packets_received_sensor_{nullptr};
   uint32_t packets_received_count_{0};
-  // Initialized to a sentinel != 0 so the first publish_counters_() call emits
-  // the initial 0 (instead of the sensor staying "unavailable" until a frame).
   uint32_t last_published_received_{UINT32_MAX};
 
   // Frames dropped in the RX callback (out of memory or work queue full).
