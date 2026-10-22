@@ -34,7 +34,7 @@ Add the component via `external_components` and then configure the receiver:
 
 ```yaml
 external_components:
-  - source: github://hn/esphome-its-g5@esphome-2026.6
+  - source: github://hn/esphome-its-g5
     components: [ its_g5_receiver ]
 
 its_g5_receiver:
@@ -82,7 +82,7 @@ sensor:
 The `bytes_received` sensor shows the total size of the received frames (the raw
 frame as captured, without the FCS checksum).
 The `packets_received` sensor shows the frames received and dispatched to `on_packet`,
-the `packets_dropped` sensors shows frames dropped in the RX callback because the internal work
+the `packets_dropped` sensor shows frames dropped in the RX callback because the internal work
 queue was full or memory was exhausted (a load/back-pressure indicator; should stay 0 in normal operation).
 
 The component intentionally leaves out some features of the reference firmware
@@ -98,21 +98,11 @@ map. This repo ships a complete, ready-to-flash example config,
 and forwards them to the OpenTrafficMap MQTT server — reproducing the reference
 firmware's behaviour.
 
-> [!WARNING]
-> Using `its-g5-opentrafficmap.yaml` as a replacement for the original
-> firmware is highly experimental and risky, since the OpenTrafficMap
-> hardware uses the KSZ8851SNL Ethernet chip, which is not (yet) included
-> in the standard ESPHome distribution. A patched Ethernet component is
-> shipped with this project, which adds support for the KSZ8851SNL.
-> **This patched component is likely to compile only with ESPHome
-> version 2026.6; expect it to break soon**.
-
 > [!NOTE]
-> If you are using your own hardware without the KSZ8851SNL chip
-> (e.g. a W5500 or a ENC28J60), everything should generally work fine.
-> Don't forget, in this case, to adjust the `ethernet:` section to match
-> your hardware, and be sure to remove `ethernet` from the `components:`
-> list in the `external_components:` section of the YAML file.
+> ESPHome 2026.10 or newer is required, as earlier versions do not support
+> the KSZ8851SNL Ethernet chip. If you need to use an older version, the tag
+> '[esphome-2026.6](https://github.com/hn/esphome-its-g5/tree/esphome-2026.6)'
+> ships a patched Ethernet component that adds KSZ8851SNL support.
 
 ### Setup
 

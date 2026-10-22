@@ -33,8 +33,8 @@ ota:
   - platform: esphome
 
 external_components:
-  - source: github://hn/esphome-its-g5@esphome-2026.6
-    components: [ its_g5_receiver, ethernet ]
+  - source: github://hn/esphome-its-g5
+    components: [ its_g5_receiver ]
 
 # Uplink. This is the KSZ8851SNL SPI ethernet of the OpenTrafficMap hardware.
 # It can be replaced by any other uplink (e.g. an LTE modem) without touching
@@ -153,7 +153,7 @@ its_g5_receiver:
         id(mqtt_client).publish("its/${node_id}/packet",
                                 (const char *) x.data(), x.size(), 0, false);
 
-# 5-LED WS2812 status strip (GPIO27 on the proto-w5500 hardware).
+# 5-LED WS2812 status strip (GPIO26 on the OpenTrafficMap hardware).
 # One addressable effect owns all five LEDs and reads live state each pass:
 #   LED0 System  : white heartbeat (1 Hz)
 #   LED1 Sniffer : green = running (network up), red = not running
@@ -168,7 +168,7 @@ light:
     pin: GPIO26
     num_leds: 5
     chipset: WS2812
-    rgb_order: GRB
+    channel_colors: GRB
     default_transition_length: 0s
     restore_mode: RESTORE_DEFAULT_ON
     on_turn_on:

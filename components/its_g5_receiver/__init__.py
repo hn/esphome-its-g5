@@ -85,4 +85,10 @@ async def to_code(config):
     # with ethernet present, ESPHome sets CONFIG_ESP_WIFI_ENABLED=n, which would
     # make esp_wifi_init() and the PHY symbols (phy_11p_set / phy_change_channel)
     # fail to link.
-    esp32.add_idf_sdkconfig_option("CONFIG_ESP_WIFI_ENABLED", True)
+    if hasattr(esp32, "request_wifi"):
+        # ESPHome >= 2026.10: esp_wifi is excluded from the IDF build by default
+        # and the WiFi sdkconfig flags are reconciled centrally. request_wifi()
+        # re-includes esp_wifi and keeps CONFIG_ESP_WIFI_ENABLED on.
+        esp32.request_wifi()
+    else:
+        esp32.add_idf_sdkconfig_option("CONFIG_ESP_WIFI_ENABLED", True)
