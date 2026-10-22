@@ -33,7 +33,7 @@ ota:
   - platform: esphome
 
 external_components:
-  - source: github://hn/esphome-its-g5
+  - source: github://hn/esphome-its-g5@esphome-2026.6
     components: [ its_g5_receiver, ethernet ]
 
 # Uplink. This is the KSZ8851SNL SPI ethernet of the OpenTrafficMap hardware.

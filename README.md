@@ -34,7 +34,7 @@ Add the component via `external_components` and then configure the receiver:
 
 ```yaml
 external_components:
-  - source: github://hn/esphome-its-g5
+  - source: github://hn/esphome-its-g5@esphome-2026.6
     components: [ its_g5_receiver ]
 
 its_g5_receiver:
