@@ -48,19 +48,24 @@ ethernet:
   interrupt_pin: GPIO9
   clock_speed: 16MHz
 
-# MQTT transport to the opentrafficmap C-ITS server. Publishing is anonymous
-# (no username/password required). TLS is mandatory (port 8883); the server
-# uses a Let's Encrypt certificate, so we verify against the ISRG Root X1 CA
-# (isrg-root-x1.pem, not secret). The wildcard certificate
-# (*.opentrafficmap.org) covers cits1, so no skip_cert_cn_check is needed.
-# Discovery is disabled so we do not publish Home Assistant discovery messages
-# to that broker.
+# MQTT transport to the opentrafficmap C-ITS server.
 mqtt:
   broker: cits1.opentrafficmap.org
-  port: 8883
+  # Publishing is anonymous (no username/password required).
+  # username: "${node_id}"
+  # password: !secret otm_node_id_password
   id: mqtt_client
+  # Discovery is disabled so we do not publish Home Assistant discovery
+  # messages to that broker.
   discovery: false
+  # TLS is mandatory (port 8883)
+  port: 8883
+  # The server's wildcard certificate (*.opentrafficmap.org) covers cits1,
+  # but the hostname check fails in practice, so skip_cert_cn_check is
+  # needed (see "MbedTLS" note in https://esphome.io/components/mqtt/).
   skip_cert_cn_check: true
+  # The server uses a Let's Encrypt certificate, so we verify against
+  # the ISRG Root X1 CA (embedded below).
   certificate_authority: |
     -----BEGIN CERTIFICATE-----
     MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
