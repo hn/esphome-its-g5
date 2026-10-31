@@ -27,10 +27,11 @@ logger:
 # Home Assistant connection via the native API (independent of MQTT).
 api:
   encryption:
-    key: !secret api_encryption_key
+    key: !secret device_name__encryption_key
 
 ota:
   - platform: esphome
+    encryption:
 
 external_components:
   - source: github://hn/esphome-its-g5
