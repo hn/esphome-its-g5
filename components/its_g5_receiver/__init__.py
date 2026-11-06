@@ -10,12 +10,13 @@ ethernet, an LTE modem, ...) and the ``esp32`` platform. It claims the WiFi PHY
 exclusively for 802.11p, hence it conflicts with the ``wifi`` component.
 """
 
-import esphome.codegen as cg
-import esphome.config_validation as cv
 from esphome import automation
+import esphome.codegen as cg
 from esphome.components import esp32
+from esphome.components.const import CONF_ON_PACKET
+import esphome.config_validation as cv
 from esphome.const import CONF_CHANNEL, CONF_ID
-from esphome.core import CoroPriority, coroutine_with_priority
+from esphome.types import ConfigType
 
 CODEOWNERS = ["@hn"]
 
@@ -27,8 +28,9 @@ DEPENDENCIES = ["esp32", "network"]
 # the regular wifi component (STA/AP connection stack) must not be present.
 CONFLICTS_WITH = ["wifi"]
 
+DOMAIN = "its_g5_receiver"
+
 CONF_BROADCAST_ONLY = "broadcast_only"
-CONF_ON_PACKET = "on_packet"
 
 # Exported for the sensor platform (sensor.py).
 CONF_ITS_G5_RECEIVER_ID = "its_g5_receiver_id"
@@ -54,15 +56,12 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_ON_PACKET): automation.validate_automation(single=True),
         }
     ).extend(cv.COMPONENT_SCHEMA),
-    cv.only_on_esp32,
+    # The 802.11p PHY functions only exist in the ESP32-C5 PHY library.
+    esp32.only_on_variant(supported=[esp32.VARIANT_ESP32C5]),
 )
 
 
-# Runs at a lower priority than the ethernet component
-# (CoroPriority.COMMUNICATION) so that our CONFIG_ESP_WIFI_ENABLED=True overrides
-# the value ethernet writes (it disables WiFi to save memory).
-@coroutine_with_priority(CoroPriority.LATE)
-async def to_code(config):
+async def to_code(config: ConfigType) -> None:
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
 
@@ -81,14 +80,7 @@ async def to_code(config):
             config[CONF_ON_PACKET],
         )
 
-    # Keep the ESP-IDF WiFi stack compiled in. Without any wifi component and
-    # with ethernet present, ESPHome sets CONFIG_ESP_WIFI_ENABLED=n, which would
-    # make esp_wifi_init() and the PHY symbols (phy_11p_set / phy_change_channel)
-    # fail to link.
-    if hasattr(esp32, "request_wifi"):
-        # ESPHome >= 2026.10: esp_wifi is excluded from the IDF build by default
-        # and the WiFi sdkconfig flags are reconciled centrally. request_wifi()
-        # re-includes esp_wifi and keeps CONFIG_ESP_WIFI_ENABLED on.
-        esp32.request_wifi()
-    else:
-        esp32.add_idf_sdkconfig_option("CONFIG_ESP_WIFI_ENABLED", True)
+    # Without the wifi component, esp_wifi is left out of the build, so
+    # esp_wifi_init() and the PHY symbols (phy_11p_set, phy_change_channel)
+    # would fail to link.
+    esp32.request_wifi()

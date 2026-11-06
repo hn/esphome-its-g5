@@ -1,30 +1,33 @@
 #include "its_g5_receiver.h"
 
 #include <cinttypes>
+#include <cstdlib>
 #include <cstring>
 
 #include "esp_err.h"
 #include "esp_wifi.h"
 
-#include "esphome/core/hal.h"
+#include "esphome/core/application.h"
 #include "esphome/core/log.h"
 
 #include "esphome/components/network/util.h"
 
-namespace esphome {
-namespace its_g5_receiver {
+namespace esphome::its_g5_receiver {
 
-static const char *const TAG = "its_g5_receiver";
+ESPHOME_LOG_TAG(TAG, "its_g5_receiver");
 
 // Number of frames buffered between the RX callback and loop().
-static const uint32_t WORK_QUEUE_LEN = 128;
+static constexpr uint32_t WORK_QUEUE_LEN = 128;
 
 // Maximum number of frames processed per loop() iteration, to bound the time
 // spent in a single loop when frames arrive in bursts.
-static const uint32_t MAX_FRAMES_PER_LOOP = 16;
+static constexpr uint32_t MAX_FRAMES_PER_LOOP = 16;
 
 // Throttle interval for publishing the counters.
-static const uint32_t COUNTER_PUBLISH_INTERVAL_MS = 1000;
+static constexpr uint32_t COUNTER_PUBLISH_INTERVAL_MS = 1000;
+
+// Retry interval when starting the sniffer fails.
+static constexpr uint32_t SNIFFER_RETRY_INTERVAL_MS = 10000;
 
 // Undocumented PHY helpers provided by the Espressif PHY blob (libphy.a).
 // These are what actually enable 802.11p / ITS-G5 reception on the ESP32-C5.
@@ -46,18 +49,19 @@ void ITSG5Receiver::setup() {
   // promiscuous mode (mirrors the reference firmware's initialize_wifi()).
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
   esp_err_t err = esp_wifi_init(&cfg);
+  if (err == ESP_OK)
+    err = esp_wifi_set_storage(WIFI_STORAGE_RAM);
+  if (err == ESP_OK)
+    err = esp_wifi_set_mode(WIFI_MODE_NULL);
   if (err != ESP_OK) {
-    ESP_LOGE(TAG, "esp_wifi_init failed: %s", esp_err_to_name(err));
-    this->mark_failed();
+    ESP_LOGE(TAG, "WiFi init error: %s", esp_err_to_name(err));
+    this->mark_failed(LOG_STR("WiFi init failed"));
     return;
   }
-  ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
-  ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL));
 
   this->work_queue_ = xQueueCreate(WORK_QUEUE_LEN, sizeof(CapturedFrame));
   if (this->work_queue_ == nullptr) {
-    ESP_LOGE(TAG, "Failed to create work queue");
-    this->mark_failed();
+    this->mark_failed(LOG_STR("Failed to create work queue"));
     return;
   }
 }
@@ -65,7 +69,11 @@ void ITSG5Receiver::setup() {
 void ITSG5Receiver::loop() {
   // Start the sniffer once, as soon as the network is connected.
   if (!this->sniffer_started_ && network::is_connected()) {
-    this->start_sniffer_();
+    const uint32_t now = App.get_loop_component_start_time();
+    if (this->last_start_attempt_ms_ == 0 || now - this->last_start_attempt_ms_ >= SNIFFER_RETRY_INTERVAL_MS) {
+      this->last_start_attempt_ms_ = now;
+      this->start_sniffer_();
+    }
   }
 
   // Drain queued frames (filled by the promiscuous RX callback) and fire the
@@ -85,9 +93,12 @@ void ITSG5Receiver::loop() {
     this->packet_trigger_.trigger(std::move(data), frame.rssi, frame.channel, frame.rate);
   }
 
+#ifdef USE_SENSOR
   this->publish_counters_();
+#endif
 }
 
+#ifdef USE_SENSOR
 void ITSG5Receiver::publish_counters_() {
   const uint32_t dropped = this->packets_dropped_count_.load(std::memory_order_relaxed);
 
@@ -95,15 +106,14 @@ void ITSG5Receiver::publish_counters_() {
       this->bytes_received_sensor_ != nullptr && this->bytes_received_count_ != this->last_published_bytes_;
   const bool received_changed =
       this->packets_received_sensor_ != nullptr && this->packets_received_count_ != this->last_published_received_;
-  const bool dropped_changed =
-      this->packets_dropped_sensor_ != nullptr && dropped != this->last_published_dropped_;
+  const bool dropped_changed = this->packets_dropped_sensor_ != nullptr && dropped != this->last_published_dropped_;
 
   if (!bytes_changed && !received_changed && !dropped_changed) {
     return;
   }
 
-  // Throttle to at most once per interval (shared by both counters).
-  const uint32_t now = millis();
+  // Throttle to at most once per interval (shared by all counters).
+  const uint32_t now = App.get_loop_component_start_time();
   if (now - this->last_publish_ms_ < COUNTER_PUBLISH_INTERVAL_MS) {
     return;
   }
@@ -125,6 +135,7 @@ void ITSG5Receiver::publish_counters_() {
     this->packets_dropped_sensor_->publish_state(dropped);
   }
 }
+#endif
 
 void ITSG5Receiver::start_sniffer_() {
   ESP_LOGI(TAG, "Starting ITS-G5 sniffer on channel %" PRIu32 " MHz", this->channel_);
@@ -139,14 +150,16 @@ void ITSG5Receiver::start_sniffer_() {
   esp_err_t err = esp_wifi_set_promiscuous(true);
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "esp_wifi_set_promiscuous failed: %s", esp_err_to_name(err));
+    this->status_set_warning();
     return;
   }
+  this->status_clear_warning();
 
   // Enable 802.11p mode (enable, unknown - must be 0).
   phy_11p_set(1, 0);
 
-  // Select a channel with a frequency close to the desired one first (this
-  // mirrors the reference firmware; not certain it is strictly required).
+  // Select a channel with a frequency close to the desired one first, as the
+  // reference firmware does.
   err = esp_wifi_set_channel(140, WIFI_SECOND_CHAN_NONE);
   if (err != ESP_OK) {
     ESP_LOGW(TAG, "esp_wifi_set_channel(140) failed: %s", esp_err_to_name(err));
@@ -218,10 +231,11 @@ void ITSG5Receiver::dump_config() {
   ESP_LOGCONFIG(TAG, "ITS-G5 Receiver:");
   ESP_LOGCONFIG(TAG, "  Channel: %" PRIu32 " MHz", this->channel_);
   ESP_LOGCONFIG(TAG, "  Broadcast only: %s", YESNO(this->broadcast_only_));
-  if (this->is_failed()) {
-    ESP_LOGE(TAG, "  Setup failed");
-  }
+#ifdef USE_SENSOR
+  LOG_SENSOR("  ", "Bytes Received", this->bytes_received_sensor_);
+  LOG_SENSOR("  ", "Packets Received", this->packets_received_sensor_);
+  LOG_SENSOR("  ", "Packets Dropped", this->packets_dropped_sensor_);
+#endif
 }
 
-}  // namespace its_g5_receiver
-}  // namespace esphome
+}  // namespace esphome::its_g5_receiver

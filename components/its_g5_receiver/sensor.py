@@ -6,13 +6,14 @@ under load.
 """
 
 import esphome.codegen as cg
-import esphome.config_validation as cv
 from esphome.components import sensor
+import esphome.config_validation as cv
 from esphome.const import (
     DEVICE_CLASS_DATA_SIZE,
     STATE_CLASS_TOTAL_INCREASING,
     UNIT_BYTES,
 )
+from esphome.types import ConfigType
 
 from . import CONF_ITS_G5_RECEIVER_ID, ITSG5Receiver
 
@@ -43,17 +44,9 @@ CONFIG_SCHEMA = cv.Schema(
 )
 
 
-async def to_code(config):
+async def to_code(config: ConfigType) -> None:
     hub = await cg.get_variable(config[CONF_ITS_G5_RECEIVER_ID])
-
-    if CONF_BYTES_RECEIVED in config:
-        sens = await sensor.new_sensor(config[CONF_BYTES_RECEIVED])
-        cg.add(hub.set_bytes_received_sensor(sens))
-
-    if CONF_PACKETS_RECEIVED in config:
-        sens = await sensor.new_sensor(config[CONF_PACKETS_RECEIVED])
-        cg.add(hub.set_packets_received_sensor(sens))
-
-    if CONF_PACKETS_DROPPED in config:
-        sens = await sensor.new_sensor(config[CONF_PACKETS_DROPPED])
-        cg.add(hub.set_packets_dropped_sensor(sens))
+    sensors = sensor.sub_sensors(config)
+    await sensors(CONF_BYTES_RECEIVED, hub.set_bytes_received_sensor)
+    await sensors(CONF_PACKETS_RECEIVED, hub.set_packets_received_sensor)
+    await sensors(CONF_PACKETS_DROPPED, hub.set_packets_dropped_sensor)

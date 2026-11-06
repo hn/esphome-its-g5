@@ -11,10 +11,11 @@
 
 #include "esphome/core/automation.h"
 #include "esphome/core/component.h"
+#ifdef USE_SENSOR
 #include "esphome/components/sensor/sensor.h"
+#endif
 
-namespace esphome {
-namespace its_g5_receiver {
+namespace esphome::its_g5_receiver {
 
 // One captured C-ITS frame handed from the promiscuous RX callback to loop()
 // via a FreeRTOS queue.
@@ -35,9 +36,11 @@ class ITSG5Receiver : public Component {
 
   void set_channel(uint32_t channel) { this->channel_ = channel; }
   void set_broadcast_only(bool broadcast_only) { this->broadcast_only_ = broadcast_only; }
-  void set_bytes_received_sensor(sensor::Sensor *s) { this->bytes_received_sensor_ = s; }
-  void set_packets_received_sensor(sensor::Sensor *s) { this->packets_received_sensor_ = s; }
-  void set_packets_dropped_sensor(sensor::Sensor *s) { this->packets_dropped_sensor_ = s; }
+#ifdef USE_SENSOR
+  SUB_SENSOR(bytes_received)
+  SUB_SENSOR(packets_received)
+  SUB_SENSOR(packets_dropped)
+#endif
 
   Trigger<std::vector<uint8_t>, float, int, int> *get_packet_trigger() { return &this->packet_trigger_; }
 
@@ -51,13 +54,16 @@ class ITSG5Receiver : public Component {
   // Instance handler invoked by the trampoline (runs in the WiFi task context).
   void handle_rx_(void *recv_buf, wifi_promiscuous_pkt_type_t type);
 
+#ifdef USE_SENSOR
   // Publish the counters, throttled to once per interval.
   void publish_counters_();
+#endif
 
   uint32_t channel_{5900};
   bool broadcast_only_{true};
 
   bool sniffer_started_{false};
+  uint32_t last_start_attempt_ms_{0};
 
   QueueHandle_t work_queue_{nullptr};
 
@@ -66,20 +72,17 @@ class ITSG5Receiver : public Component {
   // Total size of the received frames, summed over the same frames that
   // packets_received_count_ counts. Each frame contributes rx_ctrl.dump_len,
   // i.e. the raw frame without its FCS. Only touched from loop().
-  sensor::Sensor *bytes_received_sensor_{nullptr};
   uint64_t bytes_received_count_{0};
   // Initialized to a sentinel so the first publish_counters_() call emits the
   // initial 0 (instead of the sensor staying "unavailable" until a frame).
   uint64_t last_published_bytes_{UINT64_MAX};
 
   // Received (and accepted) frames. Only touched from loop().
-  sensor::Sensor *packets_received_sensor_{nullptr};
   uint32_t packets_received_count_{0};
   uint32_t last_published_received_{UINT32_MAX};
 
   // Frames dropped in the RX callback (out of memory or work queue full).
   // Incremented from the WiFi task context, read from loop(), hence atomic.
-  sensor::Sensor *packets_dropped_sensor_{nullptr};
   std::atomic<uint32_t> packets_dropped_count_{0};
   uint32_t last_published_dropped_{UINT32_MAX};
 
@@ -90,5 +93,4 @@ class ITSG5Receiver : public Component {
   static ITSG5Receiver *instance_;
 };
 
-}  // namespace its_g5_receiver
-}  // namespace esphome
+}  // namespace esphome::its_g5_receiver
