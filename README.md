@@ -95,12 +95,12 @@ The C5's own radio is busy with 802.11p, so the regular `wifi` component cannot
 use it. It can run on a second chip instead, connected over SPI with
 [`esp32_hosted`](https://esphome.io/components/esp32_hosted/) — for example a
 Seeed XIAO ESP32-C6 next to a XIAO ESP32-C5. ESPHome keeps Wi-Fi on the host's
-own radio today; esphome/esphome#PRNUM moves it to the co-processor and can be
+own radio today; esphome/esphome#22819 moves it to the co-processor and can be
 tried as an external component until it is merged:
 
 ```yaml
 external_components:
-  - source: github://pr#PRNUM
+  - source: github://pr#22819
     components: [wifi]
   - source: github://hn/esphome-its-g5
     components: [its_g5_receiver]
