@@ -8,7 +8,7 @@ raw frame bytes and reception metadata, so the user decides what to do with it
 The component is transport agnostic: it only depends on ``network`` (any uplink:
 ethernet, an LTE modem, ...) and the ``esp32`` platform. It claims the WiFi PHY
 exclusively for 802.11p, so the ``wifi`` component is only allowed when Wi-Fi
-runs on an ``esp32_hosted`` co-processor.
+runs on an ``esp32_hosted`` co-processor (``use_coprocessor: true``).
 """
 
 from esphome import automation
@@ -63,11 +63,11 @@ CONFIG_SCHEMA = cv.All(
 def _final_validate(config: ConfigType) -> ConfigType:
     # We drive the WiFi PHY directly (WIFI_MODE_NULL + promiscuous + 802.11p), so the
     # wifi component may only use the radio of an esp32_hosted co-processor.
-    full_config = fv.full_config.get()
-    if "wifi" in full_config and "esp32_hosted" not in full_config:
+    wifi = fv.full_config.get().get("wifi")
+    if wifi is not None and not wifi.get("use_coprocessor"):
         raise cv.Invalid(
             "its_g5_receiver needs the ESP32-C5 radio for 802.11p; Wi-Fi is only "
-            "possible on an esp32_hosted co-processor"
+            "possible on an esp32_hosted co-processor (wifi: use_coprocessor: true)"
         )
     return config
 
