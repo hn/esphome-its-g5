@@ -89,6 +89,45 @@ The component intentionally leaves out some features of the reference firmware
 to stay lightweight: the remote command topic, runtime (NVS) reconfiguration,
 pcap capture, and the firmware's HW_VARIANT OTA logic (ESPHome has its own OTA).
 
+## Wi-Fi uplink via a co-processor
+
+The C5's own radio is busy with 802.11p, so the regular `wifi` component cannot
+use it. It can run on a second chip instead, connected over SPI with
+[`esp32_hosted`](https://esphome.io/components/esp32_hosted/) — for example a
+Seeed XIAO ESP32-C6 next to a XIAO ESP32-C5. ESPHome keeps Wi-Fi on the host's
+own radio today; esphome/esphome#PRNUM moves it to the co-processor and can be
+tried as an external component until it is merged:
+
+```yaml
+external_components:
+  - source: github://pr#PRNUM
+    components: [wifi]
+  - source: github://hn/esphome-its-g5
+    components: [its_g5_receiver]
+
+esp32_hosted:
+  type: spi
+  variant: ESP32C6
+  clk_pin: GPIO8         # D8
+  miso_pin: GPIO9        # D9
+  mosi_pin: GPIO10       # D10
+  cs_pin: GPIO7          # D3
+  handshake_pin: GPIO1   # D0
+  data_ready_pin: GPIO0  # D1
+  reset_pin: GPIO25      # D2
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+```
+
+The C6 runs the esp-hosted co-processor firmware (`examples/wifi/sta/cp` of
+[esp-hosted-mcu](https://github.com/espressif/esp-hosted-mcu) 3.1.0) set to SPI
+with the matching pins on its side: CLK GPIO19, MISO GPIO20, MOSI GPIO18,
+CS GPIO21, handshake GPIO0, data ready GPIO1 and reset GPIO2 (the XIAO has no
+EN pin), wired D-pin to the same D-pin. Without `ipv6_only`, as esp_wifi_remote
+still needs IPv4.
+
 ## Using it with OpenTrafficMap
 
 [OpenTrafficMap](https://opentrafficmap.org/) collects C-ITS messages from
